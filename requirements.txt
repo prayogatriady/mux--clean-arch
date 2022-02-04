@@ -1,0 +1,4 @@
+go get -u github.com/go-sql-driver/mysql
+go get github.com/julienschmidt/httprouter
+go get github.com/go-playground/validator/v10
+go get github.com/dgrijalva/jwt-go

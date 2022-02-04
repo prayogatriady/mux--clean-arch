@@ -1,0 +1,12 @@
+CREATE TABLE user(
+    username VARCHAR(30) PRIMARY KEY NOT NULL,
+    password VARCHAR(20) NOT NULL,
+    group_user VARCHAR(30) NOT NULL,
+    email VARCHAR(100)
+);
+
+CREATE TABLE tweet(
+    tweet_id INTEGER PRIMARY KEY AUTO_INCREMENT,
+    username VARCHAR(30) NOT NULL,
+    tweet VARCHAR(500) NOT NULL
+);

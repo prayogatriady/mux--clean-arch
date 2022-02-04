@@ -70,3 +70,19 @@ func (userRepo *UserRepositoryImpl) FindAll(ctx context.Context, tx *sql.Tx) []d
 
 	return users
 }
+
+func (userRepo *UserRepositoryImpl) FindByUsernamePassword(ctx context.Context, tx *sql.Tx, user domain.User) (domain.User, error) {
+	query := "select username, password, group_user, email from user where username = ? and password = ?"
+	rows, err := tx.QueryContext(ctx, query, user.Username, user.Password)
+	helper.PanicIfErr(err)
+	defer rows.Close()
+
+	if rows.Next() {
+		err = rows.Scan(&user.Username, &user.Password, &user.GroupUser, &user.Email)
+		helper.PanicIfErr(err)
+		return user, nil
+	} else {
+		user.Username = ""
+		return user, errors.New("Wrong username or password")
+	}
+}

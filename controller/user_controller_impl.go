@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"fmt"
 	"go-rest-api/helper"
 	"go-rest-api/middleware"
 	"go-rest-api/model/web"
@@ -48,9 +49,16 @@ func (controller *UserControllerImpl) UpdateUser(w http.ResponseWriter, r *http.
 	err := decoder.Decode(&userUpdateRequest)
 	helper.PanicIfErr(err)
 
-	params := mux.Vars(r)
+	// params := mux.Vars(r)
+	// userUpdateRequest.Username = params["username"]
 
-	userUpdateRequest.Username = params["username"]
+	username := middleware.GetCookie(w, r) // Get username by token in cookie
+	strUsername := fmt.Sprint(username)
+	if strUsername == "" {
+		fmt.Fprint(w, "Please login first")
+		return
+	}
+	userUpdateRequest.Username = strUsername
 
 	userResponse := controller.UserService.UpdateUser(r.Context(), userUpdateRequest)
 	webResponse := web.WebResponse{
@@ -66,10 +74,17 @@ func (controller *UserControllerImpl) UpdateUser(w http.ResponseWriter, r *http.
 }
 
 func (controller *UserControllerImpl) DeleteUser(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	username := params["username"]
+	// params := mux.Vars(r)
+	// username := params["username"]
 
-	controller.UserService.DeleteUser(r.Context(), username)
+	username := middleware.GetCookie(w, r) // Get username by token in cookie
+	strUsername := fmt.Sprint(username)
+	if strUsername == "" {
+		fmt.Fprint(w, "Please login first")
+		return
+	}
+
+	controller.UserService.DeleteUser(r.Context(), strUsername)
 	webResponse := web.WebResponse{
 		Status:  "200",
 		Message: "OK",
@@ -88,18 +103,15 @@ func (controller *UserControllerImpl) FindUser(w http.ResponseWriter, r *http.Re
 
 	userResponse := controller.UserService.FindUser(r.Context(), username)
 
-	validToken, err := middleware.GenerateJWT(userResponse, w, r)
-	helper.PanicIfErr(err)
-
 	webResponse := web.WebResponse{
 		Status:  "200",
-		Message: validToken,
+		Message: "OK",
 		Data:    userResponse,
 	}
 
 	w.Header().Add("Content-Type", "application/json")
 	encoder := json.NewEncoder(w)
-	err = encoder.Encode(webResponse)
+	err := encoder.Encode(webResponse)
 	helper.PanicIfErr(err)
 }
 
@@ -115,5 +127,28 @@ func (controller *UserControllerImpl) FindAllUser(w http.ResponseWriter, r *http
 	w.Header().Add("Content-Type", "application/json")
 	encoder := json.NewEncoder(w)
 	err := encoder.Encode(webResponse)
+	helper.PanicIfErr(err)
+}
+
+func (controller *UserControllerImpl) Login(w http.ResponseWriter, r *http.Request) {
+	userLoginRequest := web.UserLoginRequest{}
+
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(&userLoginRequest)
+	helper.PanicIfErr(err)
+
+	userResponse := controller.UserService.LoginUser(r.Context(), userLoginRequest)
+
+	middleware.GenerateJWT(userResponse, w, r) // Generate token into token
+
+	webResponse := web.WebResponse{
+		Status:  "200",
+		Message: "OK",
+		Data:    userResponse,
+	}
+
+	w.Header().Add("Content-Type", "application/json")
+	encoder := json.NewEncoder(w)
+	err = encoder.Encode(webResponse)
 	helper.PanicIfErr(err)
 }

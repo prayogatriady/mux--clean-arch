@@ -15,12 +15,12 @@ var mySigningKey = []byte("secret")
 
 func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.Contains(r.RequestURI, "/api/user/") {
+		if strings.Contains(r.RequestURI, "/api/login") {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		if r.RequestURI == "/api/users" {
+		if !strings.Contains(r.RequestURI, "/api/login") {
 			cookie, err := r.Cookie("token")
 			if err != nil {
 				fmt.Fprintf(w, "No Cookie")
@@ -41,7 +41,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 				w.WriteHeader(http.StatusUnauthorized)
 			}
 
-			if claims["group_user"] != "admin" {
+			if claims["group_user"] != "admin" && strings.Contains(r.RequestURI, "/api/user") {
 				fmt.Fprint(w, "Administratior required")
 				return
 			}
@@ -51,7 +51,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func GenerateJWT(user web.UserResponse, w http.ResponseWriter, r *http.Request) (string, error) {
+func GenerateJWT(user web.UserResponse, w http.ResponseWriter, r *http.Request) {
 
 	claims := jwt.MapClaims{}
 
@@ -60,7 +60,7 @@ func GenerateJWT(user web.UserResponse, w http.ResponseWriter, r *http.Request) 
 	claims["password"] = user.Password
 	claims["group_user"] = user.GroupUser
 	claims["email"] = user.Email
-	claims["exp"] = time.Now().Add(time.Minute * 30).Unix()
+	claims["exp"] = time.Now().Add(time.Minute * 20).Unix()
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(mySigningKey)
@@ -71,6 +71,30 @@ func GenerateJWT(user web.UserResponse, w http.ResponseWriter, r *http.Request) 
 	cookie.Value = tokenString
 	cookie.Path = "/"
 	http.SetCookie(w, cookie)
+}
 
-	return tokenString, nil
+func GetCookie(w http.ResponseWriter, r *http.Request) interface{} {
+	cookie, err := r.Cookie("token")
+	if err != nil {
+		fmt.Fprintf(w, "No Cookie")
+		w.WriteHeader(http.StatusUnauthorized)
+		return nil
+	}
+
+	tokenString := cookie.Value
+
+	claims := jwt.MapClaims{}
+
+	tkn, err := jwt.ParseWithClaims(tokenString, claims, func(t *jwt.Token) (interface{}, error) {
+		return mySigningKey, nil
+	})
+	helper.PanicIfErr(err)
+
+	if !tkn.Valid {
+		w.WriteHeader(http.StatusUnauthorized)
+	}
+
+	username := claims["username"]
+
+	return username
 }

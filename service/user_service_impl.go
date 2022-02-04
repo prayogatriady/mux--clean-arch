@@ -101,3 +101,22 @@ func (service *UserServiceImpl) FindAllUser(ctx context.Context) []web.UserRespo
 
 	return userResponses
 }
+
+func (service *UserServiceImpl) LoginUser(ctx context.Context, request web.UserLoginRequest) web.UserResponse {
+	err := service.Validate.Struct(request)
+	helper.PanicIfErr(err)
+
+	tx, err := service.DB.Begin()
+	helper.PanicIfErr(err)
+	defer helper.CommitOrRollback(tx)
+
+	user := domain.User{
+		Username: request.Username,
+		Password: request.Password,
+	}
+
+	user, err = service.UserRepository.FindByUsernamePassword(ctx, tx, user)
+	helper.PanicIfErr(err)
+
+	return helper.ToUserResponse(user)
+}

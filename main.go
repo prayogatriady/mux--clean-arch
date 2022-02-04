@@ -31,9 +31,10 @@ func main() {
 
 	router.HandleFunc("/api/users", userController.FindAllUser).Methods("GET")
 	router.HandleFunc("/api/user/{username}", userController.FindUser).Methods("GET")
-	router.HandleFunc("/api/users", userController.CreateUser).Methods("POST")
-	router.HandleFunc("/api/user/{username}", userController.UpdateUser).Methods("PUT")
-	router.HandleFunc("/api/user/{username}", userController.DeleteUser).Methods("DELETE")
+	router.HandleFunc("/api/signup", userController.CreateUser).Methods("POST")
+	router.HandleFunc("/api/edit", userController.UpdateUser).Methods("PUT")
+	router.HandleFunc("/api/delete", userController.DeleteUser).Methods("DELETE")
+	router.HandleFunc("/api/login", userController.Login).Methods("POST")
 
 	fmt.Println("Server is running on port 3000")
 	server := http.Server{

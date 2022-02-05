@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"go-rest-api/helper"
 	"go-rest-api/model/domain"
 )
@@ -49,7 +48,7 @@ func (userRepo *UserRepositoryImpl) FindByUsername(ctx context.Context, tx *sql.
 		return user, nil
 	} else {
 		user.Username = ""
-		return user, errors.New("User is not found")
+		return user, nil
 	}
 }
 
@@ -83,6 +82,6 @@ func (userRepo *UserRepositoryImpl) FindByUsernamePassword(ctx context.Context, 
 		return user, nil
 	} else {
 		user.Username = ""
-		return user, errors.New("Wrong username or password")
+		return user, nil
 	}
 }

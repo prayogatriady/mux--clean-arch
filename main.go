@@ -30,11 +30,12 @@ func main() {
 	router.Use(middleware.AuthMiddleware)
 
 	router.HandleFunc("/api/users", userController.FindAllUser).Methods("GET")
-	router.HandleFunc("/api/user/{username}", userController.FindUser).Methods("GET")
-	router.HandleFunc("/api/signup", userController.CreateUser).Methods("POST")
+	router.HandleFunc("/api/profile", userController.Profile).Methods("GET")
+	router.HandleFunc("/api/signup", userController.Signup).Methods("POST")
 	router.HandleFunc("/api/edit", userController.UpdateUser).Methods("PUT")
 	router.HandleFunc("/api/delete", userController.DeleteUser).Methods("DELETE")
 	router.HandleFunc("/api/login", userController.Login).Methods("POST")
+	router.HandleFunc("/api/logout", userController.Logout).Methods("POST")
 
 	fmt.Println("Server is running on port 3000")
 	server := http.Server{

@@ -2,14 +2,12 @@ package controller
 
 import (
 	"encoding/json"
-	"fmt"
 	"go-rest-api/helper"
 	"go-rest-api/middleware"
 	"go-rest-api/model/web"
 	"go-rest-api/service"
+	"log"
 	"net/http"
-
-	"github.com/gorilla/mux"
 )
 
 type UserControllerImpl struct {
@@ -22,133 +20,239 @@ func NewUserController(userService service.UserService) UserController {
 	}
 }
 
-func (controller *UserControllerImpl) CreateUser(w http.ResponseWriter, r *http.Request) {
-	userCreateRequest := web.UserCreateRequest{}
+func (controller *UserControllerImpl) Signup(w http.ResponseWriter, r *http.Request) {
 
-	decoder := json.NewDecoder(r.Body)
-	err := decoder.Decode(&userCreateRequest)
-	helper.PanicIfErr(err)
+	var webResponse web.WebResponse
 
-	userResponse := controller.UserService.CreateUser(r.Context(), userCreateRequest)
-	webResponse := web.WebResponse{
-		Status:  "200",
-		Message: "OK",
-		Data:    userResponse,
+	tokenData := middleware.GetCookie(w, r)
+	log.Println(tokenData)
+
+	// check if user already login
+	if tokenData.Username != "" {
+		webResponse = web.WebResponse{
+			Status:  "400",
+			Message: "BAD REQUEST",
+			Data:    "Already logged in, logout first to signing up",
+		}
+	} else {
+
+		userCreateRequest := web.UserCreateRequest{}
+
+		decoder := json.NewDecoder(r.Body)
+		err := decoder.Decode(&userCreateRequest)
+		helper.PanicIfErr(err)
+
+		userResponse := controller.UserService.FindUser(r.Context(), userCreateRequest.Username)
+
+		// check if user exists
+		if userResponse.Username != "" {
+			webResponse = web.WebResponse{
+				Status:  "400",
+				Message: "BAD REQUEST",
+				Data:    "User already exists",
+			}
+		} else {
+			userResponse = controller.UserService.CreateUser(r.Context(), userCreateRequest)
+			webResponse = web.WebResponse{
+				Status:  "201",
+				Message: "CREATED",
+				Data:    userResponse,
+			}
+
+			middleware.GenerateJWT(userResponse, w, r) // Generate new user data into token
+		}
 	}
 
-	w.Header().Add("Content-Type", "application/json")
-	encoder := json.NewEncoder(w)
-	err = encoder.Encode(webResponse)
-	helper.PanicIfErr(err)
+	helper.WriteToResponseBody(w, webResponse)
 }
 
 func (controller *UserControllerImpl) UpdateUser(w http.ResponseWriter, r *http.Request) {
-	userUpdateRequest := web.UserUpdateRequest{}
 
-	decoder := json.NewDecoder(r.Body)
-	err := decoder.Decode(&userUpdateRequest)
-	helper.PanicIfErr(err)
+	var webResponse web.WebResponse
 
-	// params := mux.Vars(r)
-	// userUpdateRequest.Username = params["username"]
+	tokenData := middleware.GetCookie(w, r)
+	log.Println(tokenData)
 
-	username := middleware.GetCookie(w, r) // Get username by token in cookie
-	strUsername := fmt.Sprint(username)
-	if strUsername == "" {
-		fmt.Fprint(w, "Please login first")
-		return
+	// check if user not logged in
+	if tokenData.Username == "" {
+		webResponse = web.WebResponse{
+			Status:  "401",
+			Message: "UNAUTHORIZED",
+			Data:    "Not logged in",
+		}
+	} else {
+		userUpdateRequest := web.UserUpdateRequest{}
+		decoder := json.NewDecoder(r.Body)
+		err := decoder.Decode(&userUpdateRequest)
+		helper.PanicIfErr(err)
+
+		userUpdateRequest.Username = tokenData.Username
+
+		userResponse := controller.UserService.UpdateUser(r.Context(), userUpdateRequest)
+		webResponse = web.WebResponse{
+			Status:  "202",
+			Message: "ACCEPTED",
+			Data:    userResponse,
+		}
+
+		middleware.GenerateJWT(userResponse, w, r) // Generate new user data into token
 	}
-	userUpdateRequest.Username = strUsername
 
-	userResponse := controller.UserService.UpdateUser(r.Context(), userUpdateRequest)
-	webResponse := web.WebResponse{
-		Status:  "200",
-		Message: "OK",
-		Data:    userResponse,
-	}
-
-	w.Header().Add("Content-Type", "application/json")
-	encoder := json.NewEncoder(w)
-	err = encoder.Encode(webResponse)
-	helper.PanicIfErr(err)
+	helper.WriteToResponseBody(w, webResponse)
 }
 
 func (controller *UserControllerImpl) DeleteUser(w http.ResponseWriter, r *http.Request) {
-	// params := mux.Vars(r)
-	// username := params["username"]
 
-	username := middleware.GetCookie(w, r) // Get username by token in cookie
-	strUsername := fmt.Sprint(username)
-	if strUsername == "" {
-		fmt.Fprint(w, "Please login first")
-		return
+	var webResponse web.WebResponse
+
+	tokenData := middleware.GetCookie(w, r)
+	log.Println(tokenData)
+
+	// check if user not logged in
+	if tokenData.Username == "" {
+		webResponse = web.WebResponse{
+			Status:  "401",
+			Message: "UNAUTHORIZED",
+			Data:    "Not logged in",
+		}
+	} else {
+		controller.UserService.DeleteUser(r.Context(), tokenData.Username)
+		webResponse = web.WebResponse{
+			Status:  "200",
+			Message: "OK",
+			Data:    "User succesfully deleted",
+		}
+
+		middleware.DeleteCookie(w, r) // delete cookie
 	}
 
-	controller.UserService.DeleteUser(r.Context(), strUsername)
-	webResponse := web.WebResponse{
-		Status:  "200",
-		Message: "OK",
-		Data:    "User succesfully deleted",
-	}
-
-	w.Header().Add("Content-Type", "application/json")
-	encoder := json.NewEncoder(w)
-	err := encoder.Encode(webResponse)
-	helper.PanicIfErr(err)
+	helper.WriteToResponseBody(w, webResponse)
 }
 
-func (controller *UserControllerImpl) FindUser(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	username := params["username"]
+func (controller *UserControllerImpl) Profile(w http.ResponseWriter, r *http.Request) {
 
-	userResponse := controller.UserService.FindUser(r.Context(), username)
+	var webResponse web.WebResponse
 
-	webResponse := web.WebResponse{
-		Status:  "200",
-		Message: "OK",
-		Data:    userResponse,
+	tokenData := middleware.GetCookie(w, r)
+	log.Println(tokenData)
+
+	// check if user not logged in
+	if tokenData.Username == "" {
+		webResponse = web.WebResponse{
+			Status:  "401",
+			Message: "UNAUTHORIZED",
+			Data:    "Not logged in",
+		}
+	} else {
+		userResponse := controller.UserService.FindUser(r.Context(), tokenData.Username)
+
+		webResponse = web.WebResponse{
+			Status:  "200",
+			Message: "OK",
+			Data:    userResponse,
+		}
 	}
 
-	w.Header().Add("Content-Type", "application/json")
-	encoder := json.NewEncoder(w)
-	err := encoder.Encode(webResponse)
-	helper.PanicIfErr(err)
+	helper.WriteToResponseBody(w, webResponse)
 }
 
 func (controller *UserControllerImpl) FindAllUser(w http.ResponseWriter, r *http.Request) {
-	userResponses := controller.UserService.FindAllUser(r.Context())
 
-	webResponse := web.WebResponse{
-		Status:  "200",
-		Message: "OK",
-		Data:    userResponses,
+	var webResponse web.WebResponse
+
+	tokenData := middleware.GetCookie(w, r)
+	log.Println(tokenData)
+
+	// check if user not logged in
+	if tokenData.Username == "" {
+		webResponse = web.WebResponse{
+			Status:  "401",
+			Message: "UNAUTHORIZED",
+			Data:    "Not logged in",
+		}
+	} else {
+
+		// Only admin can access this endpoint
+		if tokenData.GroupUser == "admin" {
+			userResponses := controller.UserService.FindAllUser(r.Context())
+
+			webResponse = web.WebResponse{
+				Status:  "200",
+				Message: "OK",
+				Data:    userResponses,
+			}
+		} else {
+			webResponse = web.WebResponse{
+				Status:  "405",
+				Message: "METHOD NOT ALLOWED",
+				Data:    "Admin required",
+			}
+		}
 	}
 
-	w.Header().Add("Content-Type", "application/json")
-	encoder := json.NewEncoder(w)
-	err := encoder.Encode(webResponse)
-	helper.PanicIfErr(err)
+	helper.WriteToResponseBody(w, webResponse)
 }
 
 func (controller *UserControllerImpl) Login(w http.ResponseWriter, r *http.Request) {
-	userLoginRequest := web.UserLoginRequest{}
 
-	decoder := json.NewDecoder(r.Body)
-	err := decoder.Decode(&userLoginRequest)
-	helper.PanicIfErr(err)
+	var webResponse web.WebResponse
 
-	userResponse := controller.UserService.LoginUser(r.Context(), userLoginRequest)
+	tokenData := middleware.GetCookie(w, r)
+	log.Println(tokenData)
 
-	middleware.GenerateJWT(userResponse, w, r) // Generate token into token
+	// check if user already login
+	if tokenData.Username != "" {
+		webResponse = web.WebResponse{
+			Status:  "400",
+			Message: "BAD REQUEST",
+			Data:    "Already logged in",
+		}
+	} else {
 
-	webResponse := web.WebResponse{
-		Status:  "200",
-		Message: "OK",
-		Data:    userResponse,
+		userLoginRequest := web.UserLoginRequest{}
+
+		decoder := json.NewDecoder(r.Body)
+		err := decoder.Decode(&userLoginRequest)
+		helper.PanicIfErr(err)
+
+		userResponse := controller.UserService.LoginUser(r.Context(), userLoginRequest)
+
+		middleware.GenerateJWT(userResponse, w, r) // Generate user data into token
+
+		webResponse = web.WebResponse{
+			Status:  "200",
+			Message: "OK",
+			Data:    userResponse,
+		}
 	}
 
-	w.Header().Add("Content-Type", "application/json")
-	encoder := json.NewEncoder(w)
-	err = encoder.Encode(webResponse)
-	helper.PanicIfErr(err)
+	helper.WriteToResponseBody(w, webResponse)
+}
+
+func (controller *UserControllerImpl) Logout(w http.ResponseWriter, r *http.Request) {
+
+	var webResponse web.WebResponse
+
+	tokenData := middleware.GetCookie(w, r)
+	log.Println(tokenData)
+
+	// check if user not logged in
+	if tokenData.Username == "" {
+		webResponse = web.WebResponse{
+			Status:  "401",
+			Message: "UNAUTHORIZED",
+			Data:    "Not logged in",
+		}
+	} else {
+
+		webResponse = web.WebResponse{
+			Status:  "200",
+			Message: "OK",
+			Data:    "Logout successful",
+		}
+
+		middleware.DeleteCookie(w, r) // delete cookie
+	}
+
+	helper.WriteToResponseBody(w, webResponse)
 }
